@@ -268,11 +268,57 @@
                 </p-->
 
         <div id="settings">
-            
+
+        </div>
+
+        <!-- API Key Input (shown when server key fails) -->
+        <div id="apiKeyOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; justify-content:center; align-items:center;">
+            <div class="card" style="max-width:500px; width:90%; padding:30px;">
+                <h4>OpenAI API Key Required</h4>
+                <p id="apiKeyMessage" style="color:#dc3545;">The server's OpenAI API key is not working. Please enter your own API key to continue.</p>
+                <div class="input-group mb-3">
+                    <input type="password" class="form-control" id="apiKeyInput" placeholder="sk-...">
+                    <button class="btn btn-primary" onclick="saveApiKey()">Save</button>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <small class="text-muted">Your key is stored locally and sent only to the game server.</small>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="hideApiKeyOverlay()">Cancel</button>
+                </div>
+            </div>
         </div>
 
 
     <script>
+
+        // API Key management
+        function getUserApiKey() {
+            return localStorage.getItem('openai_api_key') || '';
+        }
+
+        function saveApiKey() {
+            const key = document.getElementById('apiKeyInput').value.trim();
+            if (key) {
+                localStorage.setItem('openai_api_key', key);
+                hideApiKeyOverlay();
+            }
+        }
+
+        function clearApiKey() {
+            localStorage.removeItem('openai_api_key');
+        }
+
+        function showApiKeyOverlay(message) {
+            const overlay = document.getElementById('apiKeyOverlay');
+            if (message) {
+                document.getElementById('apiKeyMessage').textContent = message;
+            }
+            overlay.style.display = 'flex';
+            document.getElementById('apiKeyInput').value = getUserApiKey();
+        }
+
+        function hideApiKeyOverlay() {
+            document.getElementById('apiKeyOverlay').style.display = 'none';
+        }
 
         // Define global variables
         const hero =  document.getElementById('hero');
@@ -349,49 +395,76 @@
         }
 
 
-        const socket = io('https://brennan.games:3000');
+        let socket = null;
 
-        // Emit the 'testEvent' after connecting
-        socket.on('connect', () => {
-            console.log('Connected to the server!');
-            UI.Start();
-            //socket.emit('testEvent', { data: 'Hello from the client!' });
-        });
+        try {
+            if (typeof io === 'undefined') {
+                throw new Error('Socket.io failed to load - server may be unreachable');
+            }
 
-        
-        socket.on('OnJoinEvent', (data) => {
-            console.log('Received data.player:');
-            console.log(data.player);
-            client.OnJoinGame(data.player);
-        });
+            socket = io('https://brennan.games:3000');
 
-        
-        socket.on('GameUpdate', (data) => {
-            //console.log('Received ChatUpdate:', data);
-            //console.log('Received ChatUpdate:', data.messages);
-            client.UpdateState(data.messages);
-            client.SetPlayersTurn(data.playerTurn);
-            client.UpdatePlayerList(data.playerList);
-            if (data.winner != "")
-                UI.SetWinner(data.winner);
+            // Emit the 'testEvent' after connecting
+            socket.on('connect', () => {
+                console.log('Connected to the server!');
+                UI.Start();
+                //socket.emit('testEvent', { data: 'Hello from the client!' });
+            });
 
-            BackgroundImages.SetBackground(data.bg); //takes image from server, but loading at full opacity rather then 0 as desired
-        });
-        
-        socket.on('AiResponse', (data) => {
-            UI.AiResponded(data.response);
-        });
-        
-        socket.on('ReloadPage', (data) => {
-            location.reload();
-        });
+            socket.on('connect_error', (error) => {
+                console.error('Socket connection error:', error);
+                showApiKeyOverlay("Cannot connect to the game server. The server may be down.");
+            });
 
-        /*setInterval(() => {
-            socket.emit('heartbeat', {});
-        }, 30000);  // Every 30 seconds*/
+
+            socket.on('OnJoinEvent', (data) => {
+                console.log('Received data.player:');
+                console.log(data.player);
+                client.OnJoinGame(data.player);
+            });
+
+
+            socket.on('GameUpdate', (data) => {
+                //console.log('Received ChatUpdate:', data);
+                //console.log('Received ChatUpdate:', data.messages);
+                client.UpdateState(data.messages);
+                client.SetPlayersTurn(data.playerTurn);
+                client.UpdatePlayerList(data.playerList);
+                if (data.winner != "")
+                    UI.SetWinner(data.winner);
+
+                BackgroundImages.SetBackground(data.bg); //takes image from server, but loading at full opacity rather then 0 as desired
+            });
+
+            socket.on('AiResponse', (data) => {
+                UI.AiResponded(data.response);
+            });
+
+            socket.on('ReloadPage', (data) => {
+                location.reload();
+            });
+
+            // Handle API key errors from the server
+            socket.on('ApiKeyError', (data) => {
+                UI.AiResponded('');
+                showApiKeyOverlay(data.message || "The server's OpenAI API key is not working. Please enter your own API key to continue.");
+            });
+
+            /*setInterval(() => {
+                socket.emit('heartbeat', {});
+            }, 30000);  // Every 30 seconds*/
+
+        } catch(e) {
+            console.error('Failed to initialize socket connection:', e);
+            showApiKeyOverlay("Cannot connect to the game server. Please check that the server is running.");
+        }
 
         function SubmitTestimony()
         {
+            if (!socket || !socket.connected) {
+                showApiKeyOverlay("Not connected to the server.");
+                return;
+            }
             testimony = userInput.inputFeild.value;
             console.log(testimony);
             socket.emit('SubmitTestimony', { testimony: testimony });
@@ -402,13 +475,19 @@
         {
             UI.TypeIntoInput();
             testimony = userInput.inputFeild.value;
-            socket.emit('Typing', { typing: testimony });
+            if (socket && socket.connected) {
+                socket.emit('Typing', { typing: testimony });
+            }
         }
 
         function AIRepsonse()
         {
+            if (!socket || !socket.connected) {
+                showApiKeyOverlay("Not connected to the server.");
+                return;
+            }
             UI.AiResponding();
-            socket.emit('AiRespond');
+            socket.emit('AiRespond', { apiKey: getUserApiKey() });
         }
 
 
