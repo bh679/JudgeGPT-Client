@@ -376,7 +376,7 @@
                 statusEl.textContent = 'Server responded! Reloading...';
                 setTimeout(() => location.reload(), 1500);
             } catch(e) {
-                statusEl.textContent = 'Still no response. Try again in a moment.';
+                statusEl.textContent = 'Looks like the server doesnt want to wake up right now.';
                 restarting = false;
             }
         }
