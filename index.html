@@ -280,8 +280,9 @@
                     <input type="password" class="form-control" id="apiKeyInput" placeholder="sk-...">
                     <button class="btn btn-primary" onclick="saveApiKey()">Save</button>
                 </div>
-                <div class="d-flex justify-content-between">
-                    <small class="text-muted">Your key is stored locally and sent only to the game server.</small>
+                <p style="margin-bottom: 8px;"><small class="text-muted">Your key will be used for this session (up to 1 hour) and then automatically deleted. Estimated cost: <strong>$1&#8211;3 USD</strong> per hour using GPT-4.</small></p>
+                <p style="margin-bottom: 0;"><small class="text-muted">Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a></small></p>
+                <div class="d-flex justify-content-end mt-2">
                     <button class="btn btn-sm btn-outline-secondary" onclick="hideApiKeyOverlay()">Cancel</button>
                 </div>
             </div>
@@ -290,22 +291,42 @@
 
     <script>
 
-        // API Key management
+        // API Key management (key expires after 1 hour)
+        const API_KEY_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+
         function getUserApiKey() {
-            return localStorage.getItem('openai_api_key') || '';
+            const stored = localStorage.getItem('openai_api_key');
+            const expiry = localStorage.getItem('openai_api_key_expiry');
+
+            if (!stored) return '';
+
+            // Check if key has expired
+            if (expiry && Date.now() > parseInt(expiry)) {
+                clearApiKey();
+                return '';
+            }
+            return stored;
         }
 
         function saveApiKey() {
             const key = document.getElementById('apiKeyInput').value.trim();
             if (key) {
                 localStorage.setItem('openai_api_key', key);
+                localStorage.setItem('openai_api_key_expiry', (Date.now() + API_KEY_EXPIRY_MS).toString());
                 hideApiKeyOverlay();
+
+                // Auto-delete after 1 hour
+                setTimeout(clearApiKey, API_KEY_EXPIRY_MS);
             }
         }
 
         function clearApiKey() {
             localStorage.removeItem('openai_api_key');
+            localStorage.removeItem('openai_api_key_expiry');
         }
+
+        // Clear any expired keys on page load
+        getUserApiKey();
 
         function showApiKeyOverlay(message) {
             const overlay = document.getElementById('apiKeyOverlay');
