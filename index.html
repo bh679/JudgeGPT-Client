@@ -363,22 +363,22 @@
             document.getElementById('serverDownOverlay').style.display = 'none';
         }
 
-        function kickServer() {
+        async function kickServer() {
             const statusEl = document.getElementById('kickStatus');
             statusEl.style.display = 'block';
             statusEl.textContent = 'Kicking the server...';
 
-            fetch('https://brennan.games:3000/Restart', {
-                method: 'GET',
-                headers: { 'Content-Type': 'application/json' }
-            })
-            .then(() => {
+            // Reset the restart guard so we can call it
+            restarting = false;
+
+            try {
+                await Restart();
                 statusEl.textContent = 'Server responded! Reloading...';
                 setTimeout(() => location.reload(), 1500);
-            })
-            .catch(() => {
+            } catch(e) {
                 statusEl.textContent = 'Still no response. Try again in a moment.';
-            });
+                restarting = false;
+            }
         }
 
         // Define global variables
